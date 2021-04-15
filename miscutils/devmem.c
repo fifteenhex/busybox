@@ -15,10 +15,11 @@
 //kbuild:lib-$(CONFIG_DEVMEM) += devmem.o
 
 //usage:#define devmem_trivial_usage
-//usage:	"ADDRESS [WIDTH [VALUE]]"
+//usage:	"ADDRESS[:COUNT] [WIDTH [VALUE]]"
 //usage:#define devmem_full_usage "\n\n"
 //usage:       "Read/write from physical address\n"
 //usage:     "\n	ADDRESS	Address to act upon"
+//usage:     "\n	COUNT	Number of units of width to be read or written"
 //usage:     "\n	WIDTH	Width (8/16/...)"
 //usage:     "\n	VALUE	Data to be written"
 
@@ -34,6 +35,8 @@ int devmem_main(int argc UNUSED_PARAM, char **argv)
 	unsigned page_size, mapped_size, offset_in_page;
 	int fd;
 	unsigned width = 8 * sizeof(int);
+	char *countstr;
+	size_t count = 1;
 
 	/* devmem ADDRESS [WIDTH [VALUE]] */
 // TODO: options?
@@ -42,10 +45,20 @@ int devmem_main(int argc UNUSED_PARAM, char **argv)
 // or make this behavior default?
 // Let's try this and see how users react.
 
-	/* ADDRESS */
+	/* ADDRESS + COUNT*/
 	if (!argv[1])
 		bb_show_usage();
 	errno = 0;
+
+	/* Try to find the count */
+	countstr = strchr(argv[1], ':');
+	if (countstr) {
+		count = bb_strtoull(argv[1], NULL, 0);
+		/* Now terminate the string before the count
+		 * so we can parse the target.
+		 */
+		countstr[0] = '\0';
+	}
 	target = bb_strtoull(argv[1], NULL, 0); /* allows hex, oct etc */
 
 	/* WIDTH */
@@ -95,52 +108,55 @@ int devmem_main(int argc UNUSED_PARAM, char **argv)
 
 	virt_addr = (char*)map_base + offset_in_page;
 
-	if (!argv[3]) {
-		switch (width) {
-		case 8:
-			read_result = *(volatile uint8_t*)virt_addr;
-			break;
-		case 16:
-			read_result = *(volatile uint16_t*)virt_addr;
-			break;
-		case 32:
-			read_result = *(volatile uint32_t*)virt_addr;
-			break;
-		case 64:
-			read_result = *(volatile uint64_t*)virt_addr;
-			break;
-		default:
-			bb_simple_error_msg_and_die("bad width");
-		}
-//		printf("Value at address 0x%"OFF_FMT"X (%p): 0x%llX\n",
-//			target, virt_addr,
-//			(unsigned long long)read_result);
-		/* Zero-padded output shows the width of access just done */
-		printf("0x%0*llX\n", (width >> 2), (unsigned long long)read_result);
-	} else {
-		switch (width) {
-		case 8:
-			*(volatile uint8_t*)virt_addr = writeval;
-//			read_result = *(volatile uint8_t*)virt_addr;
-			break;
-		case 16:
-			*(volatile uint16_t*)virt_addr = writeval;
-//			read_result = *(volatile uint16_t*)virt_addr;
-			break;
-		case 32:
-			*(volatile uint32_t*)virt_addr = writeval;
-//			read_result = *(volatile uint32_t*)virt_addr;
-			break;
-		case 64:
-			*(volatile uint64_t*)virt_addr = writeval;
-//			read_result = *(volatile uint64_t*)virt_addr;
-			break;
-		default:
-			bb_simple_error_msg_and_die("bad width");
-		}
-//		printf("Written 0x%llX; readback 0x%llX\n",
-//				(unsigned long long)writeval,
+	for (; count < 0; count--) {
+		if (!argv[3]) {
+			switch (width) {
+			case 8:
+				read_result = *(volatile uint8_t*)virt_addr;
+				break;
+			case 16:
+				read_result = *(volatile uint16_t*)virt_addr;
+				break;
+			case 32:
+				read_result = *(volatile uint32_t*)virt_addr;
+				break;
+			case 64:
+				read_result = *(volatile uint64_t*)virt_addr;
+				break;
+			default:
+				bb_simple_error_msg_and_die("bad width");
+			}
+//			printf("Value at address 0x%"OFF_FMT"X (%p): 0x%llX\n",
+//				target, virt_addr,
 //				(unsigned long long)read_result);
+			/* Zero-padded output shows the width of access just done */
+			printf("0x%0*llX\n", (width >> 2), (unsigned long long)read_result);
+		} else {
+			switch (width) {
+			case 8:
+				*(volatile uint8_t*)virt_addr = writeval;
+//				read_result = *(volatile uint8_t*)virt_addr;
+				break;
+			case 16:
+				*(volatile uint16_t*)virt_addr = writeval;
+//				read_result = *(volatile uint16_t*)virt_addr;
+				break;
+			case 32:
+				*(volatile uint32_t*)virt_addr = writeval;
+//				read_result = *(volatile uint32_t*)virt_addr;
+				break;
+			case 64:
+				*(volatile uint64_t*)virt_addr = writeval;
+//				read_result = *(volatile uint64_t*)virt_addr;
+				break;
+			default:
+				bb_simple_error_msg_and_die("bad width");
+			}
+//			printf("Written 0x%llX; readback 0x%llX\n",
+//					(unsigned long long)writeval,
+//					(unsigned long long)read_result);
+		}
+		virt_addr += width / 8;
 	}
 
 	if (ENABLE_FEATURE_CLEAN_UP) {

@@ -53,7 +53,8 @@ int devmem_main(int argc UNUSED_PARAM, char **argv)
 	/* Try to find the count */
 	countstr = strchr(argv[1], ':');
 	if (countstr) {
-		count = bb_strtoull(argv[1], NULL, 0);
+		countstr++;
+		count = bb_strtoull(countstr, NULL, 0);
 		/* Now terminate the string before the count
 		 * so we can parse the target.
 		 */
